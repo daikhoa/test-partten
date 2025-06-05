@@ -1,134 +1,79 @@
 package payment;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import com.restaurant.core.InvoiceManager;
 import com.restaurant.core.Order;
-import com.restaurant.core.MenuItem;
-import com.restaurant.core.Dish;
-import com.restaurant.features.payment.PaymentStrategy;
+import com.restaurant.core.InvoiceManager;
+import com.restaurant.core.MainCourseFactory;
+import com.restaurant.core.DishFactory;
 import com.restaurant.features.payment.CreditCardPayment;
 import com.restaurant.features.payment.EWalletPayment;
-import java.util.Arrays;
+import com.restaurant.features.payment.PaymentStrategy;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PaymentStrategyTest {
 
+    private Order order;
     private InvoiceManager invoiceManager;
+    private ByteArrayOutputStream outputStream;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         invoiceManager = InvoiceManager.getInstance();
+        order = new Order();
+        DishFactory mainCourseFactory = new MainCourseFactory();
+        order.addDish(mainCourseFactory.createDish("Steak", 15.0, Arrays.asList("Beef", "Salt")));
+        // Chuyển hướng System.out để kiểm tra output của PaymentStrategy
+        outputStream = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(outputStream));
     }
 
-    @Test
-    public void testCreditCardPayment() {
-        // Kiểm tra CreditCardPayment in đúng thông báo
+    
+    @Test // Kiểm tra Strategy Pattern: Đảm bảo CreditCardPayment xử lý thanh toán và in đúng thông báo
+    void testCreditCardPaymentStrategy() {
         PaymentStrategy paymentStrategy = new CreditCardPayment();
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
+        invoiceManager.generateInvoice(order, paymentStrategy);
 
-        try {
-            paymentStrategy.pay(50.0);
-            String output = outContent.toString();
-            assertTrue(output.contains("Paid $50.0 via Credit Card"), "CreditCardPayment should print correct message");
-        } finally {
-            System.setOut(originalOut);
-        }
+        // Chuẩn hóa output để bỏ qua khác biệt \r\n và \n
+        String actualOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        String expectedOutput = "Invoice - Total: $15.0\nPaid $15.0 via Credit Card\n";
+        assertEquals(expectedOutput, actualOutput, "CreditCardPayment phải in thông báo thanh toán đúng");
     }
 
+    // Kiểm tra Strategy Pattern: Đảm bảo EWalletPayment xử lý thanh toán và in đúng thông báo
     @Test
-    public void testEWalletPayment() {
-        // Kiểm tra EWalletPayment in đúng thông báo
+    void testEWalletPaymentStrategy() {
         PaymentStrategy paymentStrategy = new EWalletPayment();
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
+        invoiceManager.generateInvoice(order, paymentStrategy);
 
-        try {
-            paymentStrategy.pay(30.0);
-            String output = outContent.toString();
-            assertTrue(output.contains("Paid $30.0 via E-Wallet"), "EWalletPayment should print correct message");
-        } finally {
-            System.setOut(originalOut);
-        }
+        // Chuẩn hóa output để bỏ qua khác biệt \r\n và \n
+        String actualOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        String expectedOutput = "Invoice - Total: $15.0\nPaid $15.0 via E-Wallet\n";
+        assertEquals(expectedOutput, actualOutput, "EWalletPayment phải in thông báo thanh toán đúng");
     }
 
-    @Test
-    public void testInvoiceWithCreditCardPayment() {
-        // Kiểm tra tích hợp CreditCardPayment với InvoiceManager
-        Order order = new Order();
-        MenuItem dish = new Dish("Steak", 20.0, Arrays.asList("Beef", "Salt"));
-        order.addDish(dish);
-        PaymentStrategy paymentStrategy = new CreditCardPayment();
+    @Test // Kiểm tra Strategy Pattern: Đảm bảo InvoiceManager có thể sử dụng các PaymentStrategy khác nhau mà không thay đổi logic
+    void testSwitchingPaymentStrategies() {
+        // Test với CreditCardPayment
+        PaymentStrategy creditCardStrategy = new CreditCardPayment();
+        invoiceManager.generateInvoice(order, creditCardStrategy);
+        String creditCardOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        String expectedCreditCardOutput = "Invoice - Total: $15.0\nPaid $15.0 via Credit Card\n";
+        assertEquals(expectedCreditCardOutput, creditCardOutput, "CreditCardPayment phải in thông báo thanh toán đúng");
+        
+        // Reset output stream
+        outputStream.reset();
 
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
-
-        try {
-            invoiceManager.generateInvoice(order, paymentStrategy);
-            String output = outContent.toString();
-            assertTrue(output.contains("Invoice - Total: $20.0"), "Invoice should display correct total");
-            assertTrue(output.contains("Paid $20.0 via Credit Card"), "CreditCardPayment should be called");
-        } finally {
-            System.setOut(originalOut);
-        }
-    }
-
-    @Test
-    public void testInvoiceWithEWalletPayment() {
-        // Kiểm tra tích hợp EWalletPayment với InvoiceManager
-        Order order = new Order();
-        MenuItem dish = new Dish("Steak", 20.0, Arrays.asList("Beef", "Salt"));
-        order.addDish(dish);
-        PaymentStrategy paymentStrategy = new EWalletPayment();
-
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
-
-        try {
-            invoiceManager.generateInvoice(order, paymentStrategy);
-            String output = outContent.toString();
-            assertTrue(output.contains("Invoice - Total: $20.0"), "Invoice should display correct total");
-            assertTrue(output.contains("Paid $20.0 via E-Wallet"), "EWalletPayment should be called");
-        } finally {
-            System.setOut(originalOut);
-        }
-    }
-
-    @Test
-    public void testSwitchPaymentStrategy() {
-        // Kiểm tra hoán đổi chiến lược thanh toán
-        Order order = new Order();
-        MenuItem dish = new Dish("Steak", 20.0, Arrays.asList("Beef", "Salt"));
-        order.addDish(dish);
-
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
-
-        try {
-            // Thanh toán bằng CreditCard
-            PaymentStrategy creditCard = new CreditCardPayment();
-            invoiceManager.generateInvoice(order, creditCard);
-            String output1 = outContent.toString();
-            assertTrue(output1.contains("Paid $20.0 via Credit Card"), "CreditCardPayment should be called");
-
-            // Reset output
-            outContent.reset();
-
-            // Thanh toán bằng EWallet
-            PaymentStrategy eWallet = new EWalletPayment();
-            invoiceManager.generateInvoice(order, eWallet);
-            String output2 = outContent.toString();
-            assertTrue(output2.contains("Paid $20.0 via E-Wallet"), "EWalletPayment should be called");
-        } finally {
-            System.setOut(originalOut);
-        }
+        // Test với EWalletPayment
+        PaymentStrategy eWalletStrategy = new EWalletPayment();
+        invoiceManager.generateInvoice(order, eWalletStrategy);
+        String eWalletOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        String expectedEWalletOutput = "Invoice - Total: $15.0\nPaid $15.0 via E-Wallet\n";
+        assertEquals(expectedEWalletOutput, eWalletOutput, "EWalletPayment phải in thông báo thanh toán đúng");
     }
 }

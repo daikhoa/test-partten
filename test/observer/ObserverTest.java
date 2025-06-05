@@ -1,114 +1,79 @@
 package observer;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import com.restaurant.core.OrderManager;
 import com.restaurant.core.Order;
-import com.restaurant.core.MenuItem;
-import com.restaurant.core.Dish;
-import com.restaurant.features.observer.CustomerObserver;
+import com.restaurant.core.MainCourseFactory;
+import com.restaurant.core.DishFactory;
 import com.restaurant.features.observer.MenuDisplay;
-import java.util.Arrays;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ObserverTest {
 
-    private OrderManager manager;
-
-    // Giả lập CustomerObserver để test
-    private static class MockCustomerObserver implements CustomerObserver {
-        private boolean updated = false;
-
-        @Override
-        public void update() {
-            updated = true;
-        }
-
-        public boolean isUpdated() {
-            return updated;
-        }
-    }
+    private OrderManager orderManager;
+    private MenuDisplay menuDisplay;
+    private ByteArrayOutputStream outputStream;
 
     @BeforeEach
-    public void setUp() {
-        manager = OrderManager.getInstance();
-        manager.reset(); // Reset trạng thái trước mỗi test
+    void setUp() {
+        orderManager = OrderManager.getInstance();
+        menuDisplay = new MenuDisplay();
+        orderManager.reset(); // Đặt lại trạng thái để tránh ảnh hưởng giữa các test
+        // Chuyển hướng System.out để kiểm tra output của MenuDisplay
+        outputStream = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(outputStream));
     }
 
-    @Test
-    public void testMenuDisplayUpdate() {
-        // Kiểm tra MenuDisplay in đúng thông báo khi update
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
+    @Test // Kiểm tra Observer Pattern: Đảm bảo MenuDisplay được thông báo và in đúng thông báo khi có đơn hàng mới
+    void testMenuDisplayUpdate() {
+        // Đăng ký MenuDisplay làm observer
+        orderManager.registerObserver(menuDisplay);
 
-        try {
-            CustomerObserver menuDisplay = new MenuDisplay();
-            manager.registerObserver(menuDisplay);
-            Order order = new Order();
-            MenuItem dish = new Dish("TestDish", 10.0, Arrays.asList("TestIngredient"));
-            order.addDish(dish);
-            manager.addOrder(order);
-
-            String output = outContent.toString();
-            assertTrue(output.contains("Menu updated! New order placed."), "MenuDisplay should print update message");
-        } finally {
-            System.setOut(originalOut);
-        }
-    }
-
-    @Test
-    public void testRegisterAndNotifyObserver() {
-        // Kiểm tra đăng ký và thông báo một observer
-        MockCustomerObserver observer = new MockCustomerObserver();
-        manager.registerObserver(observer);
+        // Tạo đơn hàng mới để kích hoạt thông báo
         Order order = new Order();
-        MenuItem dish = new Dish("TestDish", 10.0, Arrays.asList("TestIngredient"));
-        order.addDish(dish);
-        manager.addOrder(order);
+        DishFactory mainCourseFactory = new MainCourseFactory();
+        order.addDish(mainCourseFactory.createDish("Steak", 15.0, Arrays.asList("Beef", "Salt")));
+        orderManager.addOrder(order);
 
-        assertTrue(observer.isUpdated(), "Observer should be notified when order is added");
+        // Chuẩn hóa output để bỏ qua khác biệt \r\n và \n
+        String actualOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        String expectedOutput = "Menu updated! New order placed.\n";
+        assertEquals(expectedOutput, actualOutput, "MenuDisplay phải in thông báo đúng khi được thông báo");
     }
 
-    @Test
-    public void testMultipleObservers() {
-        // Kiểm tra thông báo nhiều observer
-        MockCustomerObserver observer1 = new MockCustomerObserver();
-        MockCustomerObserver observer2 = new MockCustomerObserver();
-        MenuDisplay menuDisplay = new MenuDisplay();
-        manager.registerObserver(observer1);
-        manager.registerObserver(observer2);
-        manager.registerObserver(menuDisplay);
+    
+    @Test // Kiểm tra Observer Pattern: Đảm bảo nhiều MenuDisplay observers được thông báo khi có đơn hàng mới
+    void testMultipleMenuDisplayUpdates() {
+        // Đăng ký hai MenuDisplay observers
+        MenuDisplay menuDisplay2 = new MenuDisplay();
+        orderManager.registerObserver(menuDisplay);
+        orderManager.registerObserver(menuDisplay2);
 
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(outContent));
-
-        try {
-            Order order = new Order();
-            MenuItem dish = new Dish("TestDish", 10.0, Arrays.asList("TestIngredient"));
-            order.addDish(dish);
-            manager.addOrder(order);
-
-            assertTrue(observer1.isUpdated(), "Observer 1 should be notified");
-            assertTrue(observer2.isUpdated(), "Observer 2 should be notified");
-            String output = outContent.toString();
-            assertTrue(output.contains("Menu updated! New order placed."), "MenuDisplay should print update message");
-        } finally {
-            System.setOut(originalOut);
-        }
-    }
-
-    @Test
-    public void testNoObservers() {
-        // Kiểm tra khi không có observer
+        // Tạo đơn hàng mới để kích hoạt thông báo
         Order order = new Order();
-        MenuItem dish = new Dish("TestDish", 10.0, Arrays.asList("TestIngredient"));
-        order.addDish(dish);
-        manager.addOrder(order);
+        DishFactory mainCourseFactory = new MainCourseFactory();
+        order.addDish(mainCourseFactory.createDish("Steak", 15.0, Arrays.asList("Beef", "Salt")));
+        orderManager.addOrder(order);
 
-        assertEquals(1, manager.getOrders().size(), "Order should be added even with no observers");
+        // Chuẩn hóa output để bỏ qua khác biệt \r\n và \n
+        String actualOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        String expectedOutput = "Menu updated! New order placed.\nMenu updated! New order placed.\n";
+        assertEquals(expectedOutput, actualOutput, "Cả hai MenuDisplay observers phải in thông báo đúng");
+    }
+
+    @Test // Kiểm tra Observer Pattern: Đảm bảo MenuDisplay không in gì nếu không được thông báo
+    void testNoUpdateWithoutOrder() {
+        // Đăng ký MenuDisplay nhưng không thêm đơn hàng
+        orderManager.registerObserver(menuDisplay);
+
+        // Kiểm tra rằng không có output
+        String actualOutput = outputStream.toString().replaceAll("\\r\\n|\\r|\\n", "\n");
+        assertEquals("", actualOutput, "MenuDisplay không được in gì khi không có thông báo");
     }
 }
